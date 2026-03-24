@@ -24,8 +24,9 @@ def load_resources():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     model = joblib.load(os.path.join(current_dir, 'modele_maintenance_predictive.pkl'))
     encoder = joblib.load(os.path.join(current_dir, 'label_encoder_type.pkl'))
-    # Remplace par ton chemin local si nécessaire
-    df = pd.read_csv(r"C:\Users\Farouha\Downloads\ai4i+2020+predictive+maintenance+dataset\ai4i2020.csv")
+    csv_path = os.path.join(current_dir, 'ai4i2020.csv')
+    df = pd.read_csv(csv_path)
+    
     return model, encoder, df
 
 try:
