@@ -82,7 +82,7 @@ from streamlit_google_auth import Authenticate
 # Initialisation de l'authentification avec les secrets Streamlit
 try:
     auth = Authenticate(
-        secret_names="google_auth", # Doit correspondre au nom dans vos Secrets
+        secret_name="google_auth", # Doit correspondre au nom dans vos Secrets
         cookie_name=st.secrets["google_auth"]["cookie_name"],
         key=st.secrets["google_auth"]["key"],
         cookie_expiry_days=1,
