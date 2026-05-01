@@ -452,66 +452,6 @@ elif page == "📊 Distribution & Comportement":
             fillcolor='rgba(0, 204, 150, 0.3)'
         ))
 
-    # KDE pour machines en panne
-    data_ko = df_filtered[df_filtered['Machine failure']==1][var_target].values
-    if len(data_ko) > 1:
-        kde_ko = sp_stats.gaussian_kde(data_ko)
-        y_ko = kde_ko(x_range)
-        fig_kde.add_trace(go.Scatter(
-            x=x_range, y=y_ko, fill='tozeroy', name='En Panne',
-            line=dict(color=COLOR_FAIL, width=2),
-            fillcolor='rgba(239, 85, 59, 0.4)'
-        ))
-
-    fig_kde.update_layout(
-        template=TEMPLATE,
-        xaxis_title=SENSOR_VARS[var_target],
-        yaxis_title='Densité estimée',
-        legend=dict(orientation='h', y=1.12, title=''),
-        height=380,
-        margin=dict(t=40, b=20)
-    )
-    st.plotly_chart(fig_kde, use_container_width=True)
-
-    st.markdown("---")
-
-    # === BOX PLOT + VIOLIN PAR TYPE DE MACHINE ===
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.subheader("📦 Box Plot Sain vs Panne")
-        fig_box = px.box(
-            df_filtered, x='Status', y=var_target,
-            color='Status',
-            color_discrete_map={'Sain': COLOR_OK, 'En Panne': COLOR_FAIL},
-            template=TEMPLATE, points='outliers'
-        )
-        fig_box.update_layout(
-            showlegend=False,
-            xaxis_title='',
-            yaxis_title=SENSOR_VARS[var_target],
-            margin=dict(t=30, b=20),
-            height=400
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-        st.caption("📌 Compare médiane, quartiles et valeurs aberrantes.")
-
-    with c2:
-        st.subheader("🎻 Violin par type de machine")
-        fig_violin = px.violin(
-            df_filtered, x='Type', y=var_target, color='Status',
-            box=True, points=False,
-            color_discrete_map={'Sain': COLOR_OK, 'En Panne': COLOR_FAIL},
-            template=TEMPLATE,
-            category_orders={'Type': ['L', 'M', 'H']}
-        )
-        fig_violin.update_layout(
-            xaxis_title='Type (L / M / H)',
-            yaxis_title=SENSOR_VARS[var_target],
-            legend=dict(orientation='h', y=1.12, title=''),
-            margin=dict(t=30, b=20),
-            height=400
-        )
         st.plotly_chart(fig_violin, use_container_width=True)
         st.caption("📌 Distribution détaillée pour chaque qualité de machine.")
 
