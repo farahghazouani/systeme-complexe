@@ -1,3 +1,4 @@
+
 # =====================================================================
 # 🏭 INDUSTRIAL AI INSIGHTS – Dashboard de Maintenance Prédictive
 # Dataset : AI4I 2020 Predictive Maintenance Dataset
@@ -73,60 +74,78 @@ h3 { color: #FFFFFF; }
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 2. AUTHENTIFICATION
+# 2. AUTHENTIFICATION – KEYCLOAK SSO
 # =====================================================================
+# Dépendance : pip install streamlit-keycloak
+# Secrets     : configurés dans Streamlit Community Cloud
+#               (Settings > Secrets de ton app sur share.streamlit.io)
+# =====================================================================
+from streamlit_keycloak import login as keycloak_login
 
-# Dictionnaire des utilisateurs : { "username": { "password": "...", "role": "..." } }
-USERS = {
-    "admin":     {"password": "admin123",    "role": "Administrateur"},
-    "operateur": {"password": "machine456",  "role": "Opérateur"},
-    "analyste":  {"password": "analyse789",  "role": "Analyste"},
-}
-
-def login_page():
-    """Affiche la page de connexion et gère l'authentification."""
-    st.markdown("""
-    <div style="display:flex; justify-content:center; margin-top: 60px;">
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid #2A2A3E;
-                    border-radius: 16px; padding: 40px 50px; width: 100%; max-width: 420px;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-            <div style="text-align:center; margin-bottom: 30px;">
-                <div style="font-size: 56px;">🏭</div>
-                <h2 style="color:#FFFFFF; margin: 8px 0 4px 0; border:none;">Industrial AI Insights</h2>
-                <p style="color:#888; font-size:13px; margin:0;">Maintenance Prédictive Industrielle</p>
-            </div>
-    """, unsafe_allow_html=True)
-
-    col_l, col_mid, col_r = st.columns([1, 3, 1])
-    with col_mid:
-        username = st.text_input("👤 Nom d'utilisateur", placeholder="Entrez votre identifiant")
-        password = st.text_input("🔒 Mot de passe", type="password", placeholder="Entrez votre mot de passe")
-        login_btn = st.button("🔐  Se connecter", use_container_width=True)
-
-        if login_btn:
-            user = USERS.get(username)
-            if user and user["password"] == password:
-                st.session_state["logged_in"] = True
-                st.session_state["username"]  = username
-                st.session_state["role"]      = user["role"]
-                st.rerun()
-            else:
-                st.error("❌ Identifiant ou mot de passe incorrect.")
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<p style='text-align:center; color:#555; font-size:12px; margin-top:30px;'>"
-        "Accès restreint – Personnel autorisé uniquement</p>",
-        unsafe_allow_html=True
+# --- Lecture des secrets Streamlit Cloud ---
+# À renseigner dans share.streamlit.io > ton app > Settings > Secrets
+# Format attendu dans les Secrets :
+#
+#   [keycloak]
+#   url       = "https://ton-serveur-keycloak.com"
+#   realm     = "industrial-realm"
+#   client_id = "industrial-ai-insights"
+#
+try:
+    KC_URL       = st.secrets["keycloak"]["url"]
+    KC_REALM     = st.secrets["keycloak"]["realm"]
+    KC_CLIENT_ID = st.secrets["keycloak"]["client_id"]
+except KeyError:
+    st.error(
+        "❌ **Configuration Keycloak manquante.**\n\n"
+        "Ajoute les secrets dans **Streamlit Cloud > Settings > Secrets** :\n"
+        "```toml\n[keycloak]\n"
+        'url       = "https://ton-serveur-keycloak.com"\n'
+        'realm     = "industrial-realm"\n'
+        'client_id = "industrial-ai-insights"\n```'
     )
-
-# --- Vérification de la session ---
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    login_page()
     st.stop()
+
+# --- Affichage de la page de login Keycloak ---
+# streamlit-keycloak gère automatiquement la redirection OAuth2/OIDC
+# et le refresh token. La page de login est celle de Keycloak (SSO natif).
+keycloak = keycloak_login(
+    url=KC_URL,
+    realm=KC_REALM,
+    client_id=KC_CLIENT_ID,
+    # auto_refresh=True  # décommente pour activer le refresh automatique du token
+)
+
+if not keycloak.authenticated:
+    # streamlit-keycloak affiche son propre bouton "Login" et gère la redirection.
+    # st.stop() évite que le reste de l'app se charge avant connexion.
+    st.stop()
+
+# --- Extraction des infos utilisateur depuis le token Keycloak ---
+user_info   = keycloak.user_info          # dict complet renvoyé par Keycloak
+access_token = keycloak.access_token      # JWT brut (utile pour appels API sécurisés)
+
+username = user_info.get("preferred_username", user_info.get("email", "Utilisateur"))
+email    = user_info.get("email", "")
+fullname = user_info.get("name", username)
+
+# Récupération du rôle depuis les realm_roles du token
+# (les rôles sont définis dans Keycloak Admin > Realm Roles)
+realm_roles = user_info.get("roles", [])
+if "admin" in realm_roles:
+    role = "Administrateur"
+elif "analyste" in realm_roles:
+    role = "Analyste"
+else:
+    role = "Opérateur"
+
+# Stockage en session pour usage dans toute l'app
+st.session_state["logged_in"]    = True
+st.session_state["username"]     = username
+st.session_state["fullname"]     = fullname
+st.session_state["email"]        = email
+st.session_state["role"]         = role
+st.session_state["access_token"] = access_token
 
 # =====================================================================
 # 3. CHARGEMENT DES RESSOURCES
@@ -176,17 +195,20 @@ with st.sidebar:
     st.caption("Maintenance Prédictive Industrielle")
     st.markdown("---")
 
-    # Infos utilisateur connecté + bouton déconnexion
+    # Infos utilisateur connecté (données Keycloak) + bouton déconnexion
     st.markdown(
         f"<div style='background:rgba(0,180,216,0.08); border:1px solid #2A2A3E; "
         f"border-radius:10px; padding:12px; margin-bottom:10px;'>"
-        f"<span style='color:#888; font-size:12px;'>Connecté en tant que</span><br>"
-        f"<b style='color:#00B4D8;'>👤 {st.session_state['username']}</b><br>"
+        f"<span style='color:#888; font-size:12px;'>Connecté via Keycloak SSO</span><br>"
+        f"<b style='color:#00B4D8;'>👤 {st.session_state['fullname']}</b><br>"
+        f"<span style='color:#AAA; font-size:12px;'>✉️ {st.session_state['email']}</span><br>"
         f"<span style='color:#AAA; font-size:12px;'>🏷️ {st.session_state['role']}</span>"
         f"</div>",
         unsafe_allow_html=True
     )
+    # La déconnexion Keycloak invalide la session SSO côté serveur
     if st.button("🚪 Se déconnecter", use_container_width=True):
+        keycloak.logout()
         st.session_state.clear()
         st.rerun()
 
