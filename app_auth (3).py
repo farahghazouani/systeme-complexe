@@ -475,46 +475,6 @@ elif page == "📊 Distribution & Comportement":
 
     st.markdown("---")
 
-    # === BOX PLOT + VIOLIN PAR TYPE DE MACHINE ===
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.subheader("📦 Box Plot Sain vs Panne")
-        fig_box = px.box(
-            df_filtered, x='Status', y=var_target,
-            color='Status',
-            color_discrete_map={'Sain': COLOR_OK, 'En Panne': COLOR_FAIL},
-            template=TEMPLATE, points='outliers'
-        )
-        fig_box.update_layout(
-            showlegend=False,
-            xaxis_title='',
-            yaxis_title=SENSOR_VARS[var_target],
-            margin=dict(t=30, b=20),
-            height=400
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-        st.caption("📌 Compare médiane, quartiles et valeurs aberrantes.")
-
-    with c2:
-        st.subheader("🎻 Violin par type de machine")
-        fig_violin = px.violin(
-            df_filtered, x='Type', y=var_target, color='Status',
-            box=True, points=False,
-            color_discrete_map={'Sain': COLOR_OK, 'En Panne': COLOR_FAIL},
-            template=TEMPLATE,
-            category_orders={'Type': ['L', 'M', 'H']}
-        )
-        fig_violin.update_layout(
-            xaxis_title='Type (L / M / H)',
-            yaxis_title=SENSOR_VARS[var_target],
-            legend=dict(orientation='h', y=1.12, title=''),
-            margin=dict(t=30, b=20),
-            height=400
-        )
-        st.plotly_chart(fig_violin, use_container_width=True)
-        st.caption("📌 Distribution détaillée pour chaque qualité de machine.")
-
 # =====================================================================
 # PAGE 3 : ANALYSE MULTIVARIÉE (CORRÉLATIONS)
 # =====================================================================
