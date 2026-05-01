@@ -74,117 +74,49 @@ h3 { color: #FFFFFF; }
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 2. AUTHENTIFICATION – KEYCLOAK SSO
 # =====================================================================
-# Dépendance : pip install streamlit-keycloak
-# Secrets     : configurés dans Streamlit Community Cloud
-#               (Settings > Secrets de ton app sur share.streamlit.io)
+# 2. AUTHENTIFICATION – GOOGLE OAUTH2 (SSO)
 # =====================================================================
-from streamlit_keycloak import login as keycloak_login
+from streamlit_google_auth import Authenticate
 
-# --- Lecture des secrets Streamlit Cloud ---
-# À renseigner dans share.streamlit.io > ton app > Settings > Secrets
-# Format attendu dans les Secrets :
-#
-#   [keycloak]
-#   url       = "https://ton-serveur-keycloak.com"
-#   realm     = "industrial-realm"
-#   client_id = "industrial-ai-insights"
-#
+# Initialisation de l'authentification avec les secrets Streamlit
 try:
-    KC_URL       = st.secrets["keycloak"]["url"]
-    KC_REALM     = st.secrets["keycloak"]["realm"]
-    KC_CLIENT_ID = st.secrets["keycloak"]["client_id"]
-except KeyError:
-    st.error(
-        "❌ **Configuration Keycloak manquante.**\n\n"
-        "Ajoute les secrets dans **Streamlit Cloud > Settings > Secrets** :\n"
-        "```toml\n[keycloak]\n"
-        'url       = "https://ton-serveur-keycloak.com"\n'
-        'realm     = "industrial-realm"\n'
-        'client_id = "industrial-ai-insights"\n```'
+    auth = Authenticate(
+        secret_names="google_auth", # Doit correspondre au nom dans vos Secrets
+        cookie_name=st.secrets["google_auth"]["cookie_name"],
+        key=st.secrets["google_auth"]["key"],
+        cookie_expiry_days=1,
     )
+except KeyError:
+    st.error("❌ Configuration Google Auth manquante dans les Secrets.")
     st.stop()
 
-# --- Affichage de la page de login Keycloak ---
-# streamlit-keycloak gère automatiquement la redirection OAuth2/OIDC
-# et le refresh token. La page de login est celle de Keycloak (SSO natif).
-keycloak = keycloak_login(
-    url=KC_URL,
-    realm=KC_REALM,
-    client_id=KC_CLIENT_ID,
-    # auto_refresh=True  # décommente pour activer le refresh automatique du token
-)
+# Vérification du statut de connexion
+auth.check_authentification()
 
-if not keycloak.authenticated:
-    # streamlit-keycloak affiche son propre bouton "Login" et gère la redirection.
-    # st.stop() évite que le reste de l'app se charge avant connexion.
+# Si l'utilisateur n'est pas connecté, afficher le bouton Login
+if not st.session_state.get("connected"):
+    st.title("🏭 Industrial AI Insights")
+    st.info("Veuillez vous connecter avec votre compte Google pour accéder au dashboard.")
+    auth.login()
     st.stop()
 
-# --- Extraction des infos utilisateur depuis le token Keycloak ---
-user_info   = keycloak.user_info          # dict complet renvoyé par Keycloak
-access_token = keycloak.access_token      # JWT brut (utile pour appels API sécurisés)
-
-username = user_info.get("preferred_username", user_info.get("email", "Utilisateur"))
-email    = user_info.get("email", "")
+# Extraction des informations utilisateur pour le reste de l'app
+user_info = st.session_state.get("user_info", {})
+username = user_info.get("given_name", "Utilisateur")
 fullname = user_info.get("name", username)
+email = user_info.get("email", "")
 
-# Récupération du rôle depuis les realm_roles du token
-# (les rôles sont définis dans Keycloak Admin > Realm Roles)
-realm_roles = user_info.get("roles", [])
-if "admin" in realm_roles:
+# Attribution d'un rôle par défaut (ou selon l'email)
+if email == "votre-email-admin@gmail.com":
     role = "Administrateur"
-elif "analyste" in realm_roles:
-    role = "Analyste"
 else:
     role = "Opérateur"
 
-# Stockage en session pour usage dans toute l'app
-st.session_state["logged_in"]    = True
-st.session_state["username"]     = username
-st.session_state["fullname"]     = fullname
-st.session_state["email"]        = email
-st.session_state["role"]         = role
-st.session_state["access_token"] = access_token
-
-# =====================================================================
-# 3. CHARGEMENT DES RESSOURCES
-# =====================================================================
-@st.cache_resource
-def load_resources():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    model = joblib.load(os.path.join(current_dir, 'modele_maintenance_predictive.pkl'))
-    encoder = joblib.load(os.path.join(current_dir, 'label_encoder_type.pkl'))
-    df = pd.read_csv(os.path.join(current_dir, 'ai4i2020.csv'))
-    return model, encoder, df
-
-try:
-    model, encoder, df = load_resources()
-except Exception as e:
-    st.error(f"❌ Erreur de chargement des ressources : {e}")
-    st.stop()
-
-# Colonnes des modes de panne (dataset AI4I 2020)
-FAILURE_MODES = {
-    'TWF': 'Usure de l\'outil',
-    'HDF': 'Dissipation de chaleur',
-    'PWF': 'Surcharge énergétique',
-    'OSF': 'Sur-contrainte (couple)',
-    'RNF': 'Panne aléatoire'
-}
-SENSOR_VARS = {
-    'Air temperature [K]': 'Température Air (K)',
-    'Process temperature [K]': 'Température Process (K)',
-    'Rotational speed [rpm]': 'Vitesse Rotation (RPM)',
-    'Torque [Nm]': 'Couple (Nm)',
-    'Tool wear [min]': 'Usure Outil (min)'
-}
-
-# Pré-calcul utile
-df['Status'] = df['Machine failure'].map({0: 'Sain', 1: 'En Panne'})
-if 'Process temperature [K]' in df.columns and 'Air temperature [K]' in df.columns:
-    df['Temp Diff'] = df['Process temperature [K]'] - df['Air temperature [K]']
-df['Mechanical Power'] = (df['Torque [Nm]'] * df['Rotational speed [rpm]'] * 2 * np.pi / 60)  # Puissance en Watts
+# On s'assure que les variables attendues par le reste du code sont là
+st.session_state["fullname"] = fullname
+st.session_state["email"] = email
+st.session_state["role"] = role
 
 # =====================================================================
 # 3. BARRE LATÉRALE – NAVIGATION & FILTRES
@@ -206,10 +138,9 @@ with st.sidebar:
         f"</div>",
         unsafe_allow_html=True
     )
-    # La déconnexion Keycloak invalide la session SSO côté serveur
+# Ancien bloc Keycloak à remplacer :
     if st.button("🚪 Se déconnecter", use_container_width=True):
-        keycloak.logout()
-        st.session_state.clear()
+        auth.logout() # Utilise la méthode logout de Google Auth
         st.rerun()
 
     st.markdown("---")
